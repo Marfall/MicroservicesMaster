@@ -1,0 +1,69 @@
+WEB SERVICE
+    
+    - Software system designed to support interoperable (not platform dependend)
+      machine-to-machine interaction
+      over a network.
+
+    - To make the requesr platform independent, we need to make
+      the request and response platform independent.
+
+    - Every web service offers Service Definition, thar specifies:
+            - request and response format;
+
+
+KEY TERMINOLIGY:
+
+    - Request is the inout of our service;
+
+    - Response is teh ouptup from a web-service;
+
+    - Message Exchange format - is a format of the request and the response (XML, JSON);
+
+    - Service Provider - the one, which hosts the web-service;
+
+    - Sevice Consumer - the one, who uses the service;
+
+    - Service Definition - is a contract between the service provider and service consumers;
+
+    - Endpoint definew what URL is the service is exposed at.
+        - How can these service counsumer call this service which is 
+          exposed by the service provider.
+
+    - Transport - defines how a service is called: Internet (HTTP) or MQ
+
+    - MQ - the service requester would place a message in the queue;
+         - the service provider would be listening on the queue;
+         - And as soon as there is a requset on the queue, it would take the request,
+           do the processing of it, create the response and put it back in the queue and 
+           the service requseter would get the response from the queue.
+
+
+SOAP WEB SERVICES:
+
+       -  REST defines an architectual approach;
+       -  SOAP exposes restrictions on the format of XML, whih is exchanged between your service provider
+          and the service consumer;
+
+       - SOAP - Simple Object Access Protocol, defines a specific way of building web services.
+
+       - SOAP defines a specific XML request and response structure:
+
+                SOAP-ENV: Envelope, contains:
+
+                SOAP-ENV: Header (optional)
+                SOAP-ENV: Body
+
+        The header contains meta information like 
+        - authentication,
+        - authorization,
+        - signatures
+
+        The body contains the real content or the request or response.
+
+
+        - In SOAP service definition is typically done using something called
+          Web Service Definition Language (WSDL)
+
+        - WSDL defines the Endpoint, it defines all the operations that are exposed.
+        
+        - And also it specifies teh request and response structure;
