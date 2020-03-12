@@ -67,3 +67,223 @@ SOAP WEB SERVICES:
         - WSDL defines the Endpoint, it defines all the operations that are exposed.
         
         - And also it specifies teh request and response structure;
+
+
+  RESTFUL WEB SERVICES:
+
+      REST - Representational State Transfer
+
+        - HTTP-Response icludes HHTP Status Codes;
+
+        - The most important abstration in the REST is something called a Resource;
+
+        - A resourse has an URI (Uniform Resource Identifier) :
+            /user/Ranga/todos/1
+            /user/Ranga/todos
+            /user/Ranga
+
+        - A resource can have different representations:
+
+            - XML
+            - HTML
+            - JSON
+
+        - Data Exchange Format:
+
+            - No restriction. JSON is popular
+
+        - Transport:
+
+          - Only HTTP
+
+        - Service Definition:
+
+          - WADL/Swagger
+
+
+
+MICROSERVICES
+
+    -  Small autonomous services, that work together  - Sam Newman
+
+    -  In short , the microservices architectural style is an approach to developinga single
+       application as a suite of small services, each running in it's own process and communicating 
+       with lightweight mechanisms, often an HTTP resource API.
+
+    -  These services are built around business capabilities and independently deployable
+       by fully automated deployment machinery
+    
+    -  There is a bare minimum of centralized management of these services,
+       which my be written in different programming languages and use different data storage 
+       technologies - James Lewis and Martin Fowler.
+
+
+    - REST
+    - Small Well Chosen Deployable Units
+    - Cloud Enabled
+
+    - If there is more load on Microservice, I should be able to easily bring up another instance of this Microservice.
+
+
+CHALLENGES OF MICROSERVICES:
+
+    1) BOUNDED CONTEXT;
+
+    2) CONFIGURATION MANAGEMENT;
+
+    3) DYNAMIC SCALE UP AND SCALE DOWN;
+
+    4) VISIBILITY; 
+
+    5) PACK OF CARDS;
+
+
+SPRING CLOUD:
+
+    1)  CONFIGURATION MANAGEMENT  -  Spring Cloud Config Server
+
+          - There would be multiple microservices, multiple environments for each of these 
+            microservices and multiple instances in many of those environments.
+
+            => There is a lot of configuration  for these microservices, that's operations team needs to manage.
+
+
+          - Spring Cloud Config Server provides the approach where you canstore all configuration for all
+            the different environments of all the microservices in a Git repository.
+
+    2) DYNAMIC SCALE UP AND DOWN:
+
+           - Naming Server (Eureka)
+           - Ribbon (Client Side Local Balancing)
+           - Feign (Easier REST Clients)
+
+
+           - All the instances of all microservices would register with Naming Server;
+
+           Naming Server features:
+
+            - service regisration
+            - service discovery
+
+    3) VISIBILITY AND MONITORING:
+
+            - Zipking Distributed Tracing;
+            - Netfix API Gateway;
+
+    4) FAULT TOLERANCE:
+
+            - Hystrix
+
+
+
+MANAGING CONFIGURATION:
+
+    - All microservices have own configuration;
+
+    - This configuration might be things like database configuration or any external service
+      configuration.
+
+    - With Spring Cloud you put all the configurations for your applications in a git repository.
+      And SC would take care of managing the configuration and providing it to specific Microservice.
+
+
+
+CREATING HARD-CODED SERVICE:
+
+    For Spring Cloud Config Server:
+
+        spring.application.name=spring-cloud-config-server
+        server.port=8888
+
+
+          @Component
+          @ConfigurationProperties("limits-service")   - prefix in app.properties
+          public class Configuration {
+              private int minimum;
+              private int maximum;
+
+              public int getMinimum() {
+                  return minimum;
+              }
+
+              public void setMinimum(int minimum) {
+                  this.minimum = minimum;
+              }
+
+              public int getMaximum() {
+                  return maximum;
+              }
+
+              public void setMaximum(int maximum) {
+                  this.maximum = maximum;
+              }
+          }
+
+
+          @RestController
+          public class LimitsConfigurationController {
+
+              @Autowired
+              private Configuration configuration;
+
+              @GetMapping("/limits")
+              public LimitConfiguration retrieveLimitsFromConfiguration() {
+
+                  return new LimitConfiguration(configuration.getMaximum(), configuration.getMinimum());
+              }
+          }
+
+          spring.application.name=limits-service
+
+          limits-service.minimum=99
+          limits-service.maximum=9999
+
+
+LOCAL GIT CONFIG WITH PROPERTIES:
+
+    limits-service.minimum=99
+    limits-service.maximum=9999
+
+
+CONFIG SERVER MAIN:
+
+    @EnableConfigServer
+    @SpringBootApplication
+    public class SpringCloudConfigServerApplication {
+
+      public static void main(String[] args) {
+        SpringApplication.run(SpringCloudConfigServerApplication.class, args);
+      }
+
+    }
+
+CONFIG SERVER APP PROPERTIES (FOR LOCAL GIT CONFIG):
+
+
+    spring.application.name=spring-cloud-config-server
+    server.port=8888
+
+    spring.cloud.config.server.git.uri=file:///home/whitenoise/git-config/git-localconfig-repo
+
+
+URL:
+
+
+      http://localhost:8888/limits-service/default
+
+
+      - Spring Cloud Config Server stores configuration for multiple serices;
+
+
+
+MULTIPLE ENVIRONMENTS:
+
+
+      - Create few properties-file for every environment
+
+      - Environment properties source have a priority, if there was a value which was inside 
+        the default which was not present in QA , then the value from DEFAULT will be picked up.
+        But what ever is present in QA has a highest priority.
+
+
+        
