@@ -286,4 +286,76 @@ MULTIPLE ENVIRONMENTS:
         But what ever is present in QA has a highest priority.
 
 
-        
+        - You need to tell LimitsService where the Spring Cloud Config Server is, which
+          URL can be used to talk to the SCCS.
+
+          spring.cloud.config.uri=http://localhost:8888
+
+        - Appliction name is the critical part of bootstrap.properties:
+
+
+                spring.application.name=limits-service
+                spring.cloud.config.uri=http://localhost:8888
+
+
+
+CONFIGURING PROFILES:
+
+
+        - We are not configuring anything in Limits Service, all configs come from the
+          git repository.
+
+        - All that you need - to set spring profiles active to Dev:
+
+                spring.application.name=limits-service
+                spring.cloud.config.uri=http://localhost:8888
+                spring.profiles.active=dev
+
+
+        - You can pass the active profile is through things like VM arguments 
+
+
+SPRING CLOUD CONFIG SERVER:
+
+
+      - SCCS related to manage all the configurations related to multiple microservices.
+
+      - Configuring for different environments using SCCS :
+
+          - creating a few property files with specific naming convention int the GIT repository
+            and commit them in.
+          
+          - Then we able to connect the SCCS  to the git repository to be able to serve those configurations;
+
+          - In Microservice instead of application.properties we wold rename the configuration file
+            to bootstrap.properties and put the URI for this Spring Cloud Config Server.
+
+          - All the application configuration is in one place - GIT Repository;
+
+          - In basics we need to restart Microservice to pick up changes in the Git Repository;
+
+
+CURRENCY EXCHANGE SERVICE:
+
+
+      RestController:
+
+
+          @RestController
+          public class CurrencyExchangeController {
+
+              @GetMapping("/currency-exchange/from/{from}/to/{to}")
+              public ExchangeValue retrieveExchangeValue(@PathVariable String from, @PathVariable String to) {
+                  return new ExchangeValue(1000L, from, to, BigDecimal.valueOf(65));
+              }
+          }
+
+
+SETTING UP DYNAMIC PORT IN THE RESPONSE:
+
+
+      -Create  another configuration and set in Environment VM options - -Dserver.port=8001
+
+
+
+
