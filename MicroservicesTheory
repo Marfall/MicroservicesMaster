@@ -357,5 +357,496 @@ SETTING UP DYNAMIC PORT IN THE RESPONSE:
       -Create  another configuration and set in Environment VM options - -Dserver.port=8001
 
 
+      Controller with dynamic port from environment and sending port in response:
+
+
+        @RestController
+        public class CurrencyExchangeController {
+
+            @Autowired
+            private Environment environment;
+
+            @GetMapping("/currency-exchange/from/{from}/to/{to}")
+            public ExchangeValue retrieveExchangeValue(
+                    @PathVariable String from, @PathVariable String to) {
+
+              ExchangeValue exhangeValue =
+                      new ExchangeValue(1000L, from, to, BigDecimal.valueOf(65));
+              exhangeValue.setPort(
+                      Integer.parseInt(environment.getProperty("local.server.port")));
+
+              return exhangeValue;
+            }
+        }
+
+
+
+CONFIGURING JPA  AND INITIALIZING DATA:
+
+
+      	<dependency>
+          <groupId>org.springframework.boot</groupId>
+          <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+
+        <dependency>
+          <groupId>com.h2database</groupId>
+          <artifactId>h2</artifactId>
+        </dependency>
+
+
+JpaREPOSITORY:
+
+       public interface ExchangeValueRepository extends
+                JpaRepository<ExchangeValue,Long> {
+
+            ExchangeValue findByFromAndTo(String from, String to);
+        }
+
+       
+
+
+        RestController with JPA:
+
+
+          @RestController
+          public class CurrencyExchangeController {
+
+              @Autowired
+              private Environment environment;
+
+              @Autowired
+              ExchangeValueRepository repository;
+
+              @GetMapping("/currency-exchange/from/{from}/to/{to}")
+              public ExchangeValue retrieveExchangeValue(
+                      @PathVariable String from, @PathVariable String to) {
+
+                  ExchangeValue exhangeValue = repository.findByFromAndTo(from,to);
+
+                  exhangeValue.setPort(
+                        Integer.parseInt(environment.getProperty("local.server.port")));
+
+                return exhangeValue;
+              }
+          }
+MAIN WITH POSTCONSTRUCT DATA INITIALIZING:
+
+
+        @SpringBootApplication
+        public class CurrencyExchangeServiceApplication {
+
+
+            @PostConstruct
+            @Bean(initMethod = "initData")
+            public DataInitializer init() {
+              return new DataInitializer();
+            }
+
+          public static void main(String[] args) {
+            SpringApplication.run(CurrencyExchangeServiceApplication.class, args);
+          }
+
+          @Bean(initMethod = "start", destroyMethod = "stop")
+          public Server h2Server() throws SQLException {
+            return Server.createTcpServer("-tcp", "-tcpAllowOthers", "-tcpPort", "9092");
+          }
+        }
+
+      
+
+
+REST TEMPLATE:
+
+      - We need to map the response which is coming back to an entity and we would want to send a get
+        request:
+
+
+        Controller:
+
+
+
+            @RestController
+            public class CurrencyConversionController {
+                @GetMapping("currency-converter/from/{from}/to/{to}/quantity/{quantity}")
+                public CurrencyConversionBean convertCurrency(@PathVariable String from,
+                                                              @PathVariable String to,
+                                                              @PathVariable BigDecimal quantity) {
+
+                    Map<String, String> uriVariables = new HashMap<>();
+                    uriVariables.put("from",from);
+                    uriVariables.put("to",to);
+
+
+                    ResponseEntity<CurrencyConversionBean> responseEntity =
+                            new RestTemplate().getForEntity(
+                                    "http://localhost:8000/currency-exchange/from/{from}/to/{to}",
+                                        CurrencyConversionBean.class, uriVariables);
+
+                    CurrencyConversionBean response = responseEntity.getBody();
+
+                    return new CurrencyConversionBean(response.getId(), from, to, response.getConversionMultiple(),
+                            quantity,quantity.multiply(response.getConversionMultiple()),response.getPort());
+
+                }
+            }
+
+
+
+FEINGN:
+
+
+    - Feign makes easy to invoke other microservices, other RESTFul
+
+    - Feign provides integration with Ribbon - client-side 
+      load-balancing framework.
+
+      MVN - dependency:
+
+          <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-openfeign</artifactId>
+            <version>1.4.7.RELEASE</version>
+        </dependency>
+
+
+      @SpringBootApplication
+      @EnableFeignClients("com.outspace.miroservices.currencyconversionservice")     
+      
+             - enables feign to scan for clients
+
+             - We need to create a Fighn Proxy to be able to talk to a external Microservice.
+
+
+      FEIGN PROXY INTERFACE:
+
+
+            @FeignClient(name = "currency-exchange-service", url = "localhost:8000")
+            public interface CurrencyExchangeServiceProxy {
+
+                @GetMapping("/currency-exchange/from/{from}/to/{to}")
+                public CurrencyConversionBean retrieveExchangeValue(
+                        @PathVariable("from") String from, @PathVariable("to") String to);
+            }
+
+
+      CONTROLLER METHOD:
+
+
+            @GetMapping("currency-converter-feign/from/{from}/to/{to}/quantity/{quantity}")
+            public CurrencyConversionBean convertCurrencyFeign(@PathVariable String from,
+                                                          @PathVariable String to,
+                                                          @PathVariable BigDecimal quantity) {
+
+                CurrencyConversionBean response = proxy.retrieveExchangeValue(from, to);
+
+                return new CurrencyConversionBean(response.getId(), from, to, response.getConversionMultiple(),
+                        quantity,quantity.multiply(response.getConversionMultiple()),response.getPort());
+
+            }
+
+
+
+      - With Feign - all the we would need to do is to define a simple proxy,
+        we defined a CurrencyExhangeServiceProxy and we define a simple method on it.
+      - And we we able to use that proxy to make the calls of this service.
+      - Feign helps to simplify the client code to talk a RESTFul web service.
+
+      - You don't need to know that CurrencyExchangeService is a RESTFul service.
+      - You just talk to the proxy and yoa are not worried about how the proxy is 
+        getting details from the service.
+
+
+  
+CLIENT SIDE LOAD BALANCING - RIBBON:
+
+
+        <dependency>
+          <groupId>org.springframework.cloud</groupId>
+          <artifactId>spring-cloud-starter-netflix-ribbon</artifactId>
+        </dependency>
+
+      - We don't want to talk to one particular instance, but we would want to distribute the load between multiple 
+        instances of the CurrencyExchangeService.
+
+
+        currency-exchange-service.ribbon.listOfServers=http://localhost:8000, http://localhost:8001
+
+
+
+EUREKA NAMING SERVER:  
+
+
+      - We would need to be able to dynamically increse or decrease teh currency exchange services or 
+        decrease them if.
+
+      - All he instances of all microservices would register with the Naming Server;
+
+      - Whenever an instance of a Microservice comes up, it would be register itself
+        in Eureka Naming Server   - this called SERVICE REGISTRATION.
+
+      - An whenever a sevice wants to talk to another service let's said the currency calculation
+        service wants to talk to the currency exchange service, what would  do:
+
+        It would talk to the Name Server - what are instances of the currency exchange service that
+        are currently running. This is called SERVICE DISCOVERY.
+
+        - So, the currency calculation Service is asking for the location of the currency exchange services
+          the instances 
+
+
+
+      Starters:   eureka server, config-client, dev-tools, actuator
+
+      application.properties:
+
+          spring.application.name=netflix-eureka-naming-server
+          server.port=8761
+
+          eureka.client.register-with-eureka=false
+          eureka.client.fetch-registry=false
+
+      main annotation:
+
+          @EnableEurekaServer
+
+
+      - To connect CurrencyConversionService to Eureka, we need to add the dependency:
+
+
+            <dependency>
+              <groupId>org.springframework.cloud</groupId>
+              <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+            </dependency>
+
+           -  Add @EnableDiscoveryClient   annotation in Main-class
+
+           -  eureka.client.service-url.default-zone=http://localhost:8761/eureka   - in application.properties 
+
+           - Then in Eureka-Web-Interface you can see that CurrencyConversionService is registered with it
+             and an instance is running on 8100
+
+
+
+DISTRIBUTED CALLS USING EUREKA AND RIBBON:
+
+      - When the currency calculation service invokes  currency exchange service, we'll use 
+        the Naming Server  to find the details of the currency exchange service.
+
+      - So, what we would want to do is instead of hard-coding the URL for Ribbon, we would want
+        Ribbon to talk to the Naming Server and retrieve the details of all the instances of this services.
+
+      - The important thing is that without configuring the URL of the CurrencyExchangeService,
+        we are able to get the currency calculation service to talk to CurrencyExchangeService the
+        way it is happening is - Ribbon asks the Naming Server - what are the instances of the CurrencyExchangeService.
+      
+      - And it gets a list back and then it would invoke the appropriate currency exchange service.
+
+      - All the requests to the Currencu Converter would be  distributed among all the currency exchange applications,
+        which are running.
+
+
+      - There are many small services which are talking to each other that we would want to be able
+        to bring new instances of them take all the instances down without  causing a problem to any
+        of the other consumers.
+
+      - That what we have set up between the currency calculation service and the currency exchange service.
+
+      - And the tools we used to be able to do that:
+          - Ribbon
+          - Eureka
+          - Feign
+
+      - Naming Server is the one, which offers regisration that services and services discovery functionality.
+
+      - Ribbon provides the client side load balancing facilities, so it enables client calculation service
+        to distribute the load between multiple service providers
+
+      - And we use Feign to make sure that we write inside the currency calculation service to call
+        teh currency exchange service is very simple.
+
+
+
+
+API GATEWAYS:
+
+
+    - Authentication, authorization and security;
+    - Rate limits;
+    - Fault Toleration;
+    - Service Aggregation;
+
+
+    - You should want to make sure that every call to every microservice  is authenticated.
+
+    - You also want to implement things like rate limit for the specific client
+
+    - You wat all the microservices to be fault tolerant 
+
+    - Let's say there is an external consumer who wants to call 15 different services as a part of
+      one process - it is better to aggregate those 15 services and provide one service call for the external consumer. 
+
+
+
+SETTING UP ZUUL SERVER:
+
+    - Create a Component for it;
+
+    - Decide  what things  that the Zuul API should do when it intercepts a request;
+
+    - Make sure that all the important requests are configured pass throug the Zuul API Gateway;
+
+    - We'll log any request, that  omes through the gateway;
+
+
+    shouldFilter() - you can check the request ann see certain things and decide if you want to execute
+                     the filter or not.
+
+    filterType()   -  should filer happening before  the request is executed or after the request has executed
+                      or only error-requests ( String "pre", "post", "error")
+
+
+    run()          - here we implement the complete logic
+
+
+    http://localhost:8000/currency-exchange/from/USD/to/INR
+
+    http://localhost:8765/{application-name}/{uri}
+
+
+    =>   localhost:8765/currency-exchange-service/currency-exchange/from/USD/to/INR
+
+
+    - What the API Gateway does - it would log the request because we implemented a logging filter, and 
+      it would send the request out to the microservice - CurrencyExchange Microservice.
+
+
+      LOGGING FILTER:
+
+
+            @Component
+            public class ZuulLoggingFilter extends ZuulFilter {
+
+                private Logger logger = LoggerFactory.getLogger(this.getClass());
+
+                @Override
+                public boolean shouldFilter() {
+                    return true;
+                }
+
+                @Override
+                public Object run() throws ZuulException {
+
+                    HttpServletRequest request =
+                            RequestContext.getCurrentContext().getRequest();
+                    logger.info("request -> {} request uri -> {}", request, request.getRequestURI());
+
+                    return null;
+                }
+
+                @Override
+                public String filterType() {
+                    return "pre";
+                }
+
+                @Override
+                public int filterOrder() {
+                    return 1;
+                }
+            }
+
+
+
+          MAIN CLASS:
+
+
+                @EnableZuulProxy
+                @EnableDiscoveryClient
+                @SpringBootApplication
+                public class NetflixZuulApiGatewayServerApplication {
+
+                  public static void main(String[] args) {
+                    SpringApplication.run(NetflixZuulApiGatewayServerApplication.class, args);
+                  }
+
+                }
+
+
+          APPLICATION PROPERTIES:
+
+
+              spring.application.name=netflix-zuul-api-gateway-server
+              server.port=8765
+              eureka.client.service-url.default-zone=http://localhost:8761/eureka
+
+        
+        For connection to API GATEWAY we need to say in CurrencyConversionService:
+          - ok, do not connect to the currency exchange service, Feign must be connected to Zuul API Proxy
+
+
+          //@FeignClient(name = "currency-exchange-service")
+          @FeignClient(name = "netflix-zuul-api-gateway-server")
+          @RibbonClient(name = "currency-exchange-service")
+          public interface CurrencyExchangeServiceProxy {
+
+              @GetMapping("/currency-exchange-service/currency-exchange/from/{from}/to/{to}")
+              CurrencyConversionBean retrieveExchangeValue(
+                      @PathVariable("from") String from, @PathVariable("to") String to);
+          }
+
+
+          Server talk to the Naming Server and get the URI for it;
+
+          - We need to append the name of application which is exposing that service, so would need to append
+            in currency exchange service to the URI - in Get Mapping of Proxy;
+
+
+          - http://localhost:8765/{application-name}/{uri}
+
+
+
+        => Whenever you calling CurrencyCalculation service through Feign - this is being routed 
+           through API-GATEWAY the service call directly not going to the currency exchange service.
+           It is being routed through the gateway. 
+
+           The gateway is executing the filter which is logging filter.
+           And invoking the CurrencyExchangeService .
+
+           => It is intercepting the call between the CurrencyCalculationService and CurrencyExchangeService.
+
+           http://localhost:8765/{app-name}/{uri}
+
+
+
+
+DISTRIBUTED TRACING:
+
+
+          - We need one place, where can we go and see what happened with a specific request;
+          - We woud want to have one single centralized location where I can see complete chain of
+            happened with a speific request;
+
+
+SPRING CLOUD SLEUTH WITH ZIPKIN:
+
+
+            - Sleuth would assign an unique ID to a request, so that I can trace it across components.
+
+            - Zipkin - is a distributed tracing system;
+
+            - All the log from all these services we would put in MQ, we would use Rabbit MQ;
+
+            - And we would send it out to the zipkin server where it is consolodated;
+
+            - And we would able to look through the different requests and find what happened 
+              with the specific request.
+
+
+              <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-starter-sleuth</artifactId>
+              </dependency>
+
+
 
 
