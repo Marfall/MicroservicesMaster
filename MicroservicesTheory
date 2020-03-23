@@ -681,7 +681,7 @@ API GATEWAYS:
 
     - You also want to implement things like rate limit for the specific client
 
-    - You wat all the microservices to be fault tolerant 
+    - You want all the microservices to be fault tolerant 
 
     - Let's say there is an external consumer who wants to call 15 different services as a part of
       one process - it is better to aggregate those 15 services and provide one service call for the external consumer. 
@@ -848,5 +848,180 @@ SPRING CLOUD SLEUTH WITH ZIPKIN:
               </dependency>
 
 
+              - Then you need to tell what are requests you would want to intercept.
+
+
+            - Spring Cloud Sleuth assigning an ID to the request and we can use that id to trace
+              the request across multiple components.
+            - We are able to see the same request, which is present on the API gateway server - ZUUL API,
+              CurrencyExchangeService and CurrencyConversionService.
+
+            => We want to send all these messages to one place., and we want to be able to see
+               all this stuf in a centralized dashboard.
+
+
+CENTRALIZED LOG:
+
+          - What we would need to do for centralize log from all microservices:
+
+            - Zipkin distributed tracing server to get a consolidated view of what is 
+              happening across all the microservices.
+
+            - We will get all the log messages from the individual  microservice tot go to the
+              Zipkin distributed and after that we would use the UI which is provvided by
+              Zipkin to look at what happened for a specific request.
+
+            - We will use RabbitMQ, whenever there is a log message the microservice would put it
+              on the queue and Zipkin  woukd be picked it up from the queue.
+
+            => All the microservices will put the log messages on the RabbitMQ and 
+              Zipkin Distributed Tracing Server  would be listening on it and will be pulling out
+              the log messages from the MQ.
+
+            - Typically this distributed tracing server is connected to a database.
+
+            => What would happen:
+
+            -  When I fire a request, the request would hit multiple microservices right.
+            -  For example - if I calling the CurrencyCalculationService, the CurrencyCalculationService 
+               in turn would invoke the CurrencyExchangeService and what would happen is the API gateway
+               would be intercepting that. So the request would go through the currency calculation service,
+               the API gateway  and the CurrencyExchangeService, the Spring Cloud Sleuth we'll be 
+               assigning an unique ID for the request which I can use it to trace the request across 
+               multiple applications or multiple components all the microservices would put all their 
+               log messages on the queue as well into RabbitMQ and I would be able to track them on the 
+               Zipkin Distributed Server.
+
+
+              - Download Zipkin-server JAR and  execute command: 
+                  
+                    java -jar zipkin.jar
+
+                    http://localhost:9411/zipkin/    - in web interface
+
+
+
+          RABBIT_URI=amqp://localhost java -jar zipkin-server-2.20.2-exec.jar
+
+              - Starting Zipkin with MQ
+
+INSTALLING RABBIT MQ:
+
+          Install the rabbitmq-server package:
+
+              sudo apt-get install rabbitmq-server
+
+              Step 4: Start the Server
+
+              sudo systemctl start rabbitmq-server.service
+              sudo systemctl enable rabbitmq-server.service
+
+              You can check the status of RabbitMQ:
+
+              sudo rabbitmqctl status
+
+
+CONNECTING MICROSERVICES TO ZIPKIN:
+
+
+              <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-sleuth-zipkin</artifactId>
+              </dependency>
+              
+              <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-starter-bus-amqp</artifactId>
+              </dependency>
+
+
+      - So, if you click to the currency-exchange-service , you can see te path, what is the response
+        status code from where the request was fired and all that kinf of stuff.
+
+
+      - For all applications involved in the chain , you can click it and find more details of what has
+        happened with the request in the chain.
+
+
+SPRING CLOUD BUS:
+
+
+    - Even though we committed the change to the Git Repository, we're not seeing
+      the changes in the Limits Service.
+
+      Turn off the Security in Actuator:
+
+        management.security.enabled=false   (limits-service.properties)
+
+        How to make the changes reflect:
+
+          - by calling the REFRESH URI:
+
+                http://localhost:8080/application/refresh     -  POST-request
+
+                  - this is returning the new values that are being picked up.
+
+
+        So, if we  have a hundred instances, to refresh the configuration from teh Git-repository,
+        we need to invoke 100 URLs
+
+        => Spring Cloud Bus  provides a solution:
+
+          - We can have one URL for all insances and once you hit that URL,
+            al the instances of the microservices would be updated with the latest values from the Git-repository
+
+
+
+          <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-bus-amqp</artifactId>
+          </dependency>
+
+
+          - in config-server and limits-service
+          - management.security.enabled=false   in the limits-service
+
+          - And the we can send a POST-request to http://localhost:8080/bus/refresh
+
+          or 
+
+          -  http://localhost:8080/actuator/bus-refresh
+
+
+
+          - This will refresh teh configuration for all the instances of microservice
+
+          - All this magic is happening because of something called Spring Cloud Bus.
+
+          - In this specifiv instance we are running the Spring Cloud Bus over RabbitMQ.
+
+          - The way the SCB works is at application starts up, all the microservice
+            instances register with the Cloud Bus.
+
+          - So, if Limits Service has three different instances,all of them register with the bus.
+
+          - When there is any changes in configuration, when the refresh is called to any of the instances,
+            the microservice instance woukd send an event over to the Spring Cloud Bus.
+
+          - And the SCB would propagate that event to all the microservice instances that are registred with it.
+
+          - That's how all of the instances would upgrade it's configuration from the Spring Cloud Config Server.
+
+
+          - Think about the Spring Boot is as soon as we add in the right dependencies, everything is
+            auto-configured for us.
+
+          - We have RabbitMQ running in the background, Spring Boot detects that and it sees that 
+            there is an qmoq dependency in the class path, it would automatically configure a connection to
+            RabbitMQ.
+
+
+
+FAULT TOLERANCE WITH HYSTRIX:
+
+
+
+
+        
 
 
